@@ -1,0 +1,299 @@
+---
+title: "Serology Mapping Tutorial"
+author: "Malavika Rajeev"
+date: "October 30, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+rm(list = ls())
+getwd() # yours should be mapping
+```
+
+### Today
+
+
+For today, we will use administrative shapefiles (polygons) at the district level for the two Indian States for which we have data for and raster data from World Pop.
+
+We will learn how to:
+1. Read in and write out vector + raster data
+2. Extract raster data to polygons
+3. Aggregate data spatially and map 
+
+### Set-up
+
+These are the libraries we'll need to install for the tutorial. There are many different packages to work with geospatial data in R, but the ones we'll use today are **rgdal**, **sf**, and **raster**.
+
+```{r}
+## install these if not already done
+# install.packages(c("rgdal", "sf", "raster", "tidyverse", "magrittr"))
+library(rgdal)
+library(sf)
+library(raster)
+library(tidyverse)
+library(magrittr)
+```
+
+### Reading in and writing out shapefiles
+
+To read in shapefiles, we will use the `readOGR` function in the **rgdal** package. We will read in the administrative boundary 2 (district level) shapefile for the country of India (we'll call it 'india_shp' for now).
+
+One thing you might notice is that there are many different files with different extensions in the folder data/India where the national shapefile is stored. 
+
+These files must be stored together and are necessary to read in the shapefile, but the one you select is the file with the extension '.shp'. 
+
+```{r}
+india_shp <- readOGR("data/India/India.shp")
+```
+
+#### Subetting to our states of interest
+
+This is a really big file and as we are only working with data from two states, Assam and Punjab, we can subset these spatial data, just as you would a regular data frame. If you look at the data frame (try `head` and `names`), then you will see that the field for the state level is `name_1`. We want to subset this to Punjab and Assam.
+
+```{r}
+punjab <- subset(india_shp, name_1 == "Punjab")
+plot(punjab, main = "Punjab State")
+head(india_shp)
+names(india_shp)
+unique(india_shp$name_1)
+```
+
+**Now try the same for Assam:**
+
+```{r}
+## Now try the same for assam
+assam <- subset(india_shp, name_1 == "Assam")
+plot(assam, main = "Assam state")
+```
+
+#### Writing shapefiles
+If you want to save shapefiles you've made, you can write out the shapefile using the `writeOGR` function. You need to specify the object you want to write, the name of the folder where the files will go, the name of the file, and the driver. When writing shapefiles, in general you can use 'ESRI Shapefile' as the driver.
+
+```{r, eval = FALSE}
+writeOGR(punjab, "data/Punjab", "Punjab", driver = "ESRI Shapefile", overwrite_layer = TRUE)
+```
+
+### Reading in and writing out raster data
+
+The other spatial data we will work with today is high resolution estimates of human populations from the World Pop Project (you can read more about how these data are created and what else is available at http://www.worldpop.org.uk). This data gives you the number of people per 100 x 100m grid cell, but I've aggregated it up to 10 x 10 km for today so that it's easier to work with (checkout the `raster::aggregate` function if you want to try it yourself).
+
+
+We will use the `raster` function to read in the raster file:
+
+```{r}
+pop <- raster("data/india_pop.tif")
+names(pop) <- "pop"
+plot(pop)
+
+## aggregating further
+pop10 <- aggregate(pop, fact = 10, fun = sum, na.rm = TRUE)
+plot(pop10)
+```
+
+If you want to write out the raster data:
+```{r, eval = FALSE}
+writeRaster(pop10, "data/pop10.tif")
+```
+
+#### Extracting raster data to polygons 
+We can extract this data to our admin shapefiles for Assam and Punjab to get the estimated human population per district for each state. We do that using the `crop`, `mask`, and `extract` functions from the **raster** package. **Note of caution: this can be a very slow process with large shapefiles or high resolution rasters!**
+
+```{r, cache = TRUE}
+assam_pop <- crop(pop, assam) ## First we crop our pop raster to Assam
+plot(assam_pop)
+plot(assam, add = TRUE)
+assam_pop <- mask(assam_pop, assam) ## Then we have to mask this so that all values outside of Assam are set to NA
+plot(assam_pop)
+plot(assam, add = TRUE)
+```
+
+**Try it for Punjab now:**
+```{r, cache = TRUE}
+## Try it for Punjab:
+punjab_pop <- crop(pop, punjab) ## First we crop our pop raster to punjab
+plot(punjab_pop)
+plot(punjab, add = TRUE)
+punjab_pop <- mask(punjab_pop, punjab) ## Then we have to mask this so that all values outside of punjab are set to NA
+plot(punjab_pop)
+plot(punjab, add = TRUE)
+```
+
+#### Visual check
+
+We can plot to make sure it worked:
+
+```{r}
+par(mfrow = c(1, 2), mar = c(2, 2, 2, 2))
+
+plot(punjab_pop, main = "Human pop Punjab")
+plot(punjab, add = TRUE)
+
+plot(assam_pop,  main = "Human pop Assam")
+plot(assam, add = TRUE)
+```
+
+### Extracting data 
+
+Now we will extract these data, which basically means we will take all the grid cells that fall within a polygon and calculate a summary statistic. In our case we want to get the sum of values (i.e. the number of people living in each district).
+
+```{r, cache = TRUE}
+assam <- extract(assam_pop, assam, fun = sum, # we take the sum of the grid cells in each district
+                 na.rm = TRUE, # grid cells with NA pops are ignored
+                 sp = TRUE) # gives us back a spatial polygons data frame
+head(assam)
+punjab <- extract(punjab_pop, punjab, fun = sum, # we take the sum of the grid cells in each district
+                 na.rm = TRUE, # grid cells with NA pops are ignored
+                 sp = TRUE) # gives us back a spatial polygons data frame
+head(punjab)
+```
+
+Try it for Punjab:
+```{r}
+## Try it for Punjab 
+```
+
+### Aggregating serology data
+We don't actually have spatial data available, so I've assigned a district randomly to each individual in the survey. We can now aggregate this data to the district level. A new package called *sf* facilitates using the tidyverse (i.e. *dplyr* + *ggplot2*) for spatial data. For the rest of the tutorial we'll use this package to make data manipulation and plotting easier.   
+
+First we need to convert our spatial data frames to 'sf' objects:
+```{r}
+install.packages("rgeos")
+library(rgeos)
+    
+## convert using st_as sf function
+punjab_sf <- st_as_sf(punjab)
+assam_sf <- st_as_sf(assam)
+```
+
+#### `sf` (simple features) objects
+
+Check out the `sf` objects:
+```{r}
+## check out the structure of the sf object
+class(punjab_sf)
+head(punjab_sf)
+```
+They are data frames with geometries stored as a single column in a list.
+
+#### Plotting `sf` objects
+If you use the plot function on an `sf` object, you need to specify which variable to plot by: 
+
+```{r}
+par(mfrow = c(1, 2), mar = c(2, 2, 2, 2))
+
+## plot using sf notation--lets just do the pop
+plot(punjab_sf["pop"]) # see the help on plot_sf for more options on customization
+plot(assam_sf["pop"])
+```
+If you don't specify, you end up trying to plot all the attributes, which can be slow and messy!
+
+You can also use ggplot:
+```{r}
+## you can also use ggplot
+ggplot(punjab_sf) + geom_sf()
+ggplot(punjab_sf) + geom_sf(aes(fill = pop)) 
+
+```
+
+#### Aggregating data to district level
+
+We can read in our serodata from earlier and we will change the qualitative results to 0 for positive and 1 for negative to make summarizing easier:
+```{r}
+df.eia <- read_csv("serodata_spatial.csv")
+df.eia
+df.eia %>% # change so that results are 0/1 to more easily aggregate
+  mutate(REVQUAL_M = ifelse(REVQUAL_M =="Positive", 1, 0),
+         REVQUAL_R = ifelse(REVQUAL_R =="Positive", 1, 0)) -> df.eia 
+
+```
+
+We will now calculate summary statistics for each variable 
+```{r}
+df.eia %>%
+  filter(SITEID == "Assam") %>% # filter for Assam
+  group_by(district) %>% # group by district
+  summarize(sample_size= n(), pos_measles = sum(REVQUAL_M), 
+            pos_rub = sum(REVQUAL_R),
+            avg_age_sampled = mean(AGE), 
+            avg_age_posM = sum(AGE*REVQUAL_M)/pos_measles,
+            avg_age_posR = sum(AGE*REVQUAL_R)/pos_rub) %>%
+  right_join(assam_sf, by = c("district" = "name_2")) -> assam_dist
+```
+
+**Now try for Punjab:**
+
+```{r}
+## Do the same for punjab to get the same summarized vars for each district
+```
+
+### Mapping data 
+
+Now we can visualize our serodata spatially.
+Lets map the proportion seropositive for measles by district for each state:
+
+```{r}
+## Map the average age of sampled + infection 
+assam_dist %>%
+  ggplot() + geom_sf(aes(fill = pos_measles/sample_size)) + 
+  scale_fill_continuous(name = "Proportion \n seropositive: \n measles", 
+                        type = "viridis")
+punjab_dist %>%
+  ggplot() + geom_sf(aes(fill = pos_measles/sample_size)) + 
+  scale_fill_continuous(name = "Proportion \n seropositive: \n measles", 
+                        type = "viridis")
+
+```
+
+#### Play around plotting other variables
+
+```{r}
+
+```
+
+### Excercises
+While we don't have true spatially resolved data at the district level, we will use the data that we generated to practice what we learned earlier today. **Note: this is just to learn how to work with data rather than a question driven modeling approach (which is always preferrable;)**
+
+#### Excercise 1: extract births by district
+In the data folder is a raster dataset of births at a 10 x 10 km grid for India taken from World Pop. Extract this data to the district level for Assam and Punjab (**you will need to use the original spatial polygon data frames, i.e. `punjab` not `punjab_sf`**)
+
+```{r On your own: extract births, cache = TRUE}
+```
+
+#### Excercise 2: glm on spatial data (seropositivity ~ birth rate)
+
+Explore the relationship between seropositivity (the response variable) at the district level and the per capita birthrate (the predictor variable, calculate as the number of births/population) for rubella for Punjab.
+
+**Hint: you will want to use family = binomial, but this time your data will follow the following formula: glm(cbind(successes, failures) ~ predictor, family = binomial) where the successes = # of seropositives and failures = # of seronegatives.**
+
+```{r On your own 2: model of seropositivity by birthrate for punjab}
+punjab_sf <- st_as_sf(punjab)
+
+```
+
+##### Bonus 1
+
+Combine both Punjab and Assam datasets and add in state as a random effect!**
+
+**Hint: you will need to use the `glmer` function from the lme4 package.**
+```{r bonus: adding in state level random effect}
+
+```
+
+##### Bonus 2
+
+**I didn't actually assign individuals randomly to districts! Can you figure out which variable I used to allocate sampled individuals (hint: all the data you have is the data I have:)?**
+
+```{r bonus code in answer key for how to generate factor weighted by population}
+
+```
+
+
+### Further resources for geospatial analyses in R
+
+https://geocompr.robinlovelace.net
+
+http://rspatial.org
+
+https://map.ox.ac.uk
+(Mainly malaria data, but also accessibility, and a nice R package which includes a way to access admin shapefiles by country)
+
