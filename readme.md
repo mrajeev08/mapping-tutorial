@@ -1,6 +1,7 @@
 # Intro to mapping in R Tutorial 
 Nov 2018  
-Chennai, India
+Chennai, India  
+
 Slides for an introduction to mapping in R tutorial for a workshop on modeling infectious diseases and seroepidemiology for Indian Council of Medical Researchers. Includes a Rmarkdown document for the tutorial and the corresponding answer key.
 
 The data included in this repository were simulated and the script to generate this data is [here](gen_spatial_data.R).
