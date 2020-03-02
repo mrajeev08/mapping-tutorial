@@ -12,7 +12,6 @@ getwd() # yours should be mapping
 
 ### Today
 
-
 For today, we will use administrative shapefiles (polygons) at the district level for the two Indian States for which we have data for and raster data from World Pop.
 
 We will learn how to:
@@ -25,7 +24,7 @@ We will learn how to:
 These are the libraries we'll need to install for the tutorial. There are many different packages to work with geospatial data in R, but the ones we'll use today are **rgdal**, **sf**, and **raster**.
 
 ```{r}
-## install these if not already done
+# install these if not already done
 # install.packages(c("rgdal", "sf", "raster", "tidyverse", "magrittr"))
 library(rgdal)
 library(sf)
@@ -61,7 +60,7 @@ unique(india_shp$name_1)
 **Now try the same for Assam:**
 
 ```{r}
-## Now try the same for assam
+# Now try the same for assam
 assam <- subset(india_shp, name_1 == "Assam")
 plot(assam, main = "Assam state")
 ```
@@ -85,7 +84,7 @@ pop <- raster("data/india_pop.tif")
 names(pop) <- "pop"
 plot(pop)
 
-## aggregating further
+# aggregating further
 pop10 <- aggregate(pop, fact = 10, fun = sum, na.rm = TRUE)
 plot(pop10)
 ```
@@ -99,21 +98,21 @@ writeRaster(pop10, "data/pop10.tif")
 We can extract this data to our admin shapefiles for Assam and Punjab to get the estimated human population per district for each state. We do that using the `crop`, `mask`, and `extract` functions from the **raster** package. **Note of caution: this can be a very slow process with large shapefiles or high resolution rasters!**
 
 ```{r, cache = TRUE}
-assam_pop <- crop(pop, assam) ## First we crop our pop raster to Assam
+assam_pop <- crop(pop, assam) # First we crop our pop raster to Assam
 plot(assam_pop)
 plot(assam, add = TRUE)
-assam_pop <- mask(assam_pop, assam) ## Then we have to mask this so that all values outside of Assam are set to NA
+assam_pop <- mask(assam_pop, assam) # Then we have to mask this so that all values outside of Assam are set to NA
 plot(assam_pop)
 plot(assam, add = TRUE)
 ```
 
 **Try it for Punjab now:**
 ```{r, cache = TRUE}
-## Try it for Punjab:
-punjab_pop <- crop(pop, punjab) ## First we crop our pop raster to punjab
+# Try it for Punjab:
+punjab_pop <- crop(pop, punjab) # First we crop our pop raster to punjab
 plot(punjab_pop)
 plot(punjab, add = TRUE)
-punjab_pop <- mask(punjab_pop, punjab) ## Then we have to mask this so that all values outside of punjab are set to NA
+punjab_pop <- mask(punjab_pop, punjab) # Then we have to mask this so that all values outside of punjab are set to NA
 plot(punjab_pop)
 plot(punjab, add = TRUE)
 ```
@@ -149,7 +148,7 @@ head(punjab)
 
 Try it for Punjab:
 ```{r}
-## Try it for Punjab 
+# Try it for Punjab 
 ```
 
 ### Aggregating serology data
@@ -160,7 +159,7 @@ First we need to convert our spatial data frames to 'sf' objects:
 install.packages("rgeos")
 library(rgeos)
     
-## convert using st_as sf function
+# convert using st_as sf function
 punjab_sf <- st_as_sf(punjab)
 assam_sf <- st_as_sf(assam)
 ```
@@ -169,7 +168,7 @@ assam_sf <- st_as_sf(assam)
 
 Check out the `sf` objects:
 ```{r}
-## check out the structure of the sf object
+# check out the structure of the sf object
 class(punjab_sf)
 head(punjab_sf)
 ```
@@ -181,7 +180,7 @@ If you use the plot function on an `sf` object, you need to specify which variab
 ```{r}
 par(mfrow = c(1, 2), mar = c(2, 2, 2, 2))
 
-## plot using sf notation--lets just do the pop
+# plot using sf notation--lets just do the pop
 plot(punjab_sf["pop"]) # see the help on plot_sf for more options on customization
 plot(assam_sf["pop"])
 ```
@@ -189,7 +188,7 @@ If you don't specify, you end up trying to plot all the attributes, which can be
 
 You can also use ggplot:
 ```{r}
-## you can also use ggplot
+# you can also use ggplot
 ggplot(punjab_sf) + geom_sf()
 ggplot(punjab_sf) + geom_sf(aes(fill = pop)) 
 
@@ -217,13 +216,14 @@ df.eia %>%
             avg_age_sampled = mean(AGE), 
             avg_age_posM = sum(AGE*REVQUAL_M)/pos_measles,
             avg_age_posR = sum(AGE*REVQUAL_R)/pos_rub) %>%
-  right_join(assam_sf, by = c("district" = "name_2")) -> assam_dist
+  right_join(assam_sf, by = c("district" = "name_2")) %>%
+  st_as_sf() -> assam_dist
 ```
 
 **Now try for Punjab:**
 
 ```{r}
-## Do the same for punjab to get the same summarized vars for each district
+# Do the same for punjab to get the same summarized vars for each district
 ```
 
 ### Mapping data 
@@ -232,7 +232,7 @@ Now we can visualize our serodata spatially.
 Lets map the proportion seropositive for measles by district for each state:
 
 ```{r}
-## Map the average age of sampled + infection 
+# Map the average age of sampled + infection 
 assam_dist %>%
   ggplot() + geom_sf(aes(fill = pos_measles/sample_size)) + 
   scale_fill_continuous(name = "Proportion \n seropositive: \n measles", 
@@ -286,7 +286,6 @@ Combine both Punjab and Assam datasets and add in state as a random effect!**
 ```{r bonus code in answer key for how to generate factor weighted by population}
 
 ```
-
 
 ### Further resources for geospatial analyses in R
 
